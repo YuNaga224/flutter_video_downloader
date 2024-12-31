@@ -1,4 +1,5 @@
 // lib/state/video_downloader_notifier.dart
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -7,6 +8,8 @@ import 'package:html/parser.dart' as parser;
 import 'package:vid_downloader/state/video_downloader_state.dart';
 import 'package:vid_downloader/state/video_list_notifier.dart';
 import 'package:vid_downloader/state/video_list_state.dart';
+
+import '../utils/fix_url.dart';
 
 class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
   final StateNotifier<VideoListState> _videoListNotifier;
@@ -25,48 +28,73 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
 
   // プログレス付きダウンロードの実装
   Future<void> _downloadWithProgress(String url, String fileName) async {
+    final client = http.Client();
     try {
-      final response = await http.get(Uri.parse(url));
-      final contentLength =
-          int.parse(response.headers['content-length'] ?? '0');
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await client.send(request);
+      final contentLength = response.contentLength ?? 0;
 
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/$fileName');
+      final sink = file.openWrite();
 
-      List<int> bytes = [];
       int downloaded = 0;
 
-      for (var byte in response.bodyBytes) {
-        bytes.add(byte);
-        downloaded++;
+      // Completerを使用してストリーム完了を待つ
+      final completer = Completer<void>();
 
-        if (contentLength > 0) {
-          final progress = downloaded / contentLength;
-          state = state.copyWith(progress: progress);
-        }
-      }
+      final subscription = response.stream.listen(
+        (List<int> chunk) async {
+          sink.add(chunk);
+          downloaded += chunk.length;
+          print(downloaded);
+          if (contentLength > 0) {
+            final progress = downloaded / contentLength;
+            state = state.copyWith(progress: progress);
+          }
+        },
+        onDone: () async {
+          try {
+            await sink.flush();
+            await sink.close();
+            state = state.copyWith(
+              downloadStatus: DownloadStatus.success,
+              localFilePath: file.path,
+            );
 
-      await file.writeAsBytes(bytes);
-      state = state.copyWith(
-        downloadStatus: DownloadStatus.success,
-        localFilePath: file.path,
+            await (_videoListNotifier as VideoListNotifier).addVideo(
+              state.localFilePath!,
+              fileName,
+            );
+            completer.complete();
+          } catch (e) {
+            completer.completeError(e);
+          }
+        },
+        onError: (error) {
+          completer.completeError(error);
+        },
+        cancelOnError: true,
       );
 
-      await (_videoListNotifier as VideoListNotifier).addVideo(
-          state.localFilePath!,
-          fileName,
-        );
+      // ストリームの完了を待つ
+      await completer.future;
+      await subscription.cancel();
 
     } catch (e) {
       state = state.copyWith(
         downloadStatus: DownloadStatus.error,
         errorMessage: 'ダウンロード中にエラーが発生しました: $e',
       );
+    } finally {
+      client.close();
     }
   }
 
   // Twitter動画のダウンロード処理
   Future<void> downloadTwitterVideo(String url) async {
+    final fixedUrl = fixUrl(url);
+
     state = state.copyWith(
       downloadStatus: DownloadStatus.loading,
       progress: 0.0,
@@ -75,7 +103,7 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
 
     try {
       // Twitter動画の情報を取得
-      final apiUrl = 'https://twitsave.com/info?url=$url';
+      final apiUrl = 'https://twitsave.com/info?url=$fixedUrl';
       final response = await http.get(Uri.parse(apiUrl));
 
       if (response.statusCode != 200) {
@@ -113,6 +141,7 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
 
   // 汎用的な動画ダウンロード処理
   Future<void> downloadVideo(String videoUrl) async {
+    final fixedUrl = fixUrl(videoUrl);
     state = state.copyWith(
       downloadStatus: DownloadStatus.loading,
       progress: 0.0,
@@ -120,8 +149,8 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
     );
 
     try {
-      final fileName = _generateFileName(videoUrl);
-      await _downloadWithProgress(videoUrl, fileName);
+      final fileName = _generateFileName(fixedUrl);
+      await _downloadWithProgress(fixedUrl, fileName);
     } catch (e) {
       state = state.copyWith(
         downloadStatus: DownloadStatus.error,
@@ -130,7 +159,6 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
     }
   }
 }
-
 
 final videoDownloaderProvider =
     StateNotifierProvider<VideoDownloaderNotifier, VideoDownloaderState>(
