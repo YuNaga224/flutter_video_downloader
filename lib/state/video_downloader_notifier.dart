@@ -5,9 +5,14 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:html/parser.dart' as parser;
 import 'package:vid_downloader/state/video_downloader_state.dart';
+import 'package:vid_downloader/state/video_list_notifier.dart';
+import 'package:vid_downloader/state/video_list_state.dart';
 
 class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
-  VideoDownloaderNotifier() : super(const VideoDownloaderState());
+  final StateNotifier<VideoListState> _videoListNotifier;
+
+  VideoDownloaderNotifier(this._videoListNotifier)
+      : super(const VideoDownloaderState());
 
   // URLからファイル名を生成するヘルパーメソッド
   String _generateFileName(String url, [String? customName]) {
@@ -43,14 +48,16 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
       }
 
       await file.writeAsBytes(bytes);
-      print("###########");
-      print(file.path);
-      print(bytes);
-      print("############");
       state = state.copyWith(
         downloadStatus: DownloadStatus.success,
         localFilePath: file.path,
       );
+
+      await (_videoListNotifier as VideoListNotifier).addVideo(
+          state.localFilePath!,
+          fileName,
+        );
+        
     } catch (e) {
       state = state.copyWith(
         downloadStatus: DownloadStatus.error,
@@ -96,7 +103,7 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
           .text;
 
       final fileName = _generateFileName(url, title);
-      await _downloadWithProgress(videoUrl!, fileName);
+      await _downloadWithProgress(videoUrl, fileName);
     } catch (e) {
       state = state.copyWith(
         downloadStatus: DownloadStatus.error,
@@ -125,7 +132,8 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
   }
 }
 
+
 final videoDownloaderProvider =
     StateNotifierProvider<VideoDownloaderNotifier, VideoDownloaderState>(
-  (ref) => VideoDownloaderNotifier(),
+  (ref) => VideoDownloaderNotifier(ref.watch(videoListProvider.notifier)),
 );

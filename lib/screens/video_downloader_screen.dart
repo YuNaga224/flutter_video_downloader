@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:vid_downloader/state/video_downloader_notifier.dart';
 import 'package:vid_downloader/state/video_downloader_state.dart';
 import 'package:video_player/video_player.dart';
+import 'package:vid_downloader/screens/video_list_screen.dart';
 
 class VideoDownloaderScreen extends HookConsumerWidget {
   const VideoDownloaderScreen({super.key});
@@ -15,29 +16,8 @@ class VideoDownloaderScreen extends HookConsumerWidget {
     final videoUrlController = useTextEditingController();
     final videoDownloaderState = ref.watch(videoDownloaderProvider);
     final videoDownloaderNotifier = ref.read(videoDownloaderProvider.notifier);
-    final videoPlayerController = useState<VideoPlayerController?>(null);
 
-    // ビデオプレーヤーの初期化
-    useEffect(() {
-      if (videoDownloaderState.localFilePath != null) {
-        Future.delayed(const Duration(milliseconds: 100), () async {
-          final controller = VideoPlayerController.file(
-            File(videoDownloaderState.localFilePath!),
-          );
 
-          try {
-            await controller.initialize();
-            videoPlayerController.value = controller;
-            controller.play();
-          } catch (e) {
-            print('VideoPlayer初期化エラー: $e');
-          }
-        });
-      }
-      return () {
-        videoPlayerController.value?.dispose();
-      };
-    }, [videoDownloaderState.localFilePath]);
 
     return Scaffold(
       appBar: AppBar(
@@ -109,23 +89,16 @@ class VideoDownloaderScreen extends HookConsumerWidget {
                 ),
               ),
 
-            // ビデオプレーヤー
-            if (videoDownloaderState.localFilePath != null)
-              Expanded(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: videoPlayerController.value?.value.isInitialized ==
-                            true
-                        ? AspectRatio(
-                            aspectRatio:
-                                videoPlayerController.value!.value.aspectRatio,
-                            child: VideoPlayer(videoPlayerController.value!),
-                          )
-                        : const Center(child: CircularProgressIndicator()),
-                  ),
-                ),
-              ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const VideoListScreen()),
+                );
+              },
+              child: const Text('View Saved Videos'),
+            ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
