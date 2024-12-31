@@ -19,7 +19,6 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
     if (customName != null) {
       return '${customName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}.mp4';
     }
-    final uri = Uri.parse(url);
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     return 'video_$timestamp.mp4';
   }
@@ -57,7 +56,7 @@ class VideoDownloaderNotifier extends StateNotifier<VideoDownloaderState> {
           state.localFilePath!,
           fileName,
         );
-        
+
     } catch (e) {
       state = state.copyWith(
         downloadStatus: DownloadStatus.error,

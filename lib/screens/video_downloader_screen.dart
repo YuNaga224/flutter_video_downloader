@@ -1,11 +1,8 @@
-// lib/screens/video_downloader_screen.dart
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:vid_downloader/state/video_downloader_notifier.dart';
 import 'package:vid_downloader/state/video_downloader_state.dart';
-import 'package:video_player/video_player.dart';
 import 'package:vid_downloader/screens/video_list_screen.dart';
 
 class VideoDownloaderScreen extends HookConsumerWidget {
